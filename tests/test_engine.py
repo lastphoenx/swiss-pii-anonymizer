@@ -47,3 +47,42 @@ def test_analyze_only_no_mutation(fake_flair):
 
     findings = analyze(text)
     assert any(f.entity_type == "PERSON" and f.text == "Maria Muster" for f in findings)
+
+
+def test_organization_redacted(fake_flair):
+    text = "Rechnungsadresse: Beispiel AG, Musterstrasse 1."
+    r = anonymize(text)
+    assert "Beispiel AG" not in r.text
+    assert "ORGANIZATION" in {f.entity_type for f in r.findings}
+
+
+def test_title_merged_into_person_span(fake_flair):
+    text = "Kontakt: Dr. Maria Muster, Tel. 044 555 66 77."
+    r = anonymize(text)
+    assert "Dr." not in r.text
+    assert "Maria Muster" not in r.text
+    person_findings = [f for f in r.findings if f.entity_type == "PERSON"]
+    assert person_findings and person_findings[0].text == "Dr. Maria Muster"
+
+
+def test_chained_titles_merged_into_person_span(fake_flair):
+    text = "Prof. Dr. med. Hans Zimmer war anwesend."
+    r = anonymize(text)
+    assert "Prof." not in r.text
+    person_findings = [f for f in r.findings if f.entity_type == "PERSON"]
+    assert person_findings and person_findings[0].text == "Prof. Dr. med. Hans Zimmer"
+
+
+def test_greeting_not_treated_as_title(fake_flair):
+    text = "Guten Tag Maria Muster"
+    r = anonymize(text)
+    assert r.text == "Guten Tag [PERSON]"
+
+
+def test_de_business_ids_redacted(fake_flair):
+    text = "USt-IdNr. DE123456789, Handelsregister HRB 12345."
+    r = anonymize(text)
+    assert "DE123456789" not in r.text
+    assert "HRB 12345" not in r.text
+    types = {f.entity_type for f in r.findings}
+    assert types == {"DE_VAT_ID", "DE_HANDELSREGISTER"}
