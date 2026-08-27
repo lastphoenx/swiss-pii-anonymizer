@@ -3,7 +3,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from swiss_pii_anonymizer.checksums import ean13_check_digit, iban_mod97_valid, is_valid_ahv
+from swiss_pii_anonymizer.checksums import (
+    ch_uid_check_digit,
+    ean13_check_digit,
+    iban_mod97_valid,
+    is_valid_ahv,
+    is_valid_ch_uid,
+)
 
 
 def test_ahv_valid_checksum():
@@ -34,3 +40,24 @@ def test_iban_invalid_checksum():
 
 def test_iban_too_short():
     assert not iban_mod97_valid("CH93")
+
+
+def test_ch_uid_valid_known_examples():
+    # Real, öffentlich bekannte UIDs (Beispiele aus diversen CH-Validator-Testsuiten)
+    assert is_valid_ch_uid("CHE-116.281.710")
+    assert is_valid_ch_uid("CHE-109.322.551")
+
+
+def test_ch_uid_computed_checksum_roundtrip():
+    base = "12345678"
+    full = base + str(ch_uid_check_digit(base))
+    formatted = f"CHE-{full[0:3]}.{full[3:6]}.{full[6:9]}"
+    assert is_valid_ch_uid(formatted)
+
+
+def test_ch_uid_invalid_checksum():
+    assert not is_valid_ch_uid("CHE-116.281.711")
+
+
+def test_ch_uid_wrong_length():
+    assert not is_valid_ch_uid("CHE-116.281")

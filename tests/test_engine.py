@@ -86,3 +86,34 @@ def test_de_business_ids_redacted(fake_flair):
     assert "HRB 12345" not in r.text
     types = {f.entity_type for f in r.findings}
     assert types == {"DE_VAT_ID", "DE_HANDELSREGISTER"}
+
+
+def test_ch_uid_redacted(fake_flair):
+    text = "Unternehmens-Identifikationsnummer: CHE-116.281.710."
+    r = anonymize(text)
+    assert "CHE-116.281.710" not in r.text
+    assert "CH_UID" in {f.entity_type for f in r.findings}
+
+
+def test_ch_address_redacted(fake_flair):
+    text = "Firmensitz: Landoltstrasse 63, 3007 Bern."
+    r = anonymize(text)
+    assert "Landoltstrasse 63" not in r.text
+    assert "CH_ADDRESS" in {f.entity_type for f in r.findings}
+
+
+def test_phone_with_parenthetical_trunk_zero_redacted(fake_flair):
+    text = "Kontakt: , +41 (0)31 333 01 51."
+    r = anonymize(text)
+    assert "+41 (0)31 333 01 51" not in r.text
+    assert "CH_PHONE_NUMBER" in {f.entity_type for f in r.findings}
+
+
+def test_long_unsegmented_text_keeps_correct_offsets(fake_flair):
+    filler = "Dies ist ein langer Testtext ohne besondere Namen und Orte. " * 40
+    assert len(filler) > 2000  # > FlairPersonRecognizer-Chunk-Grösse -> Chunking greift
+    text = filler + "Kontakt ist Maria Muster, vielen Dank."
+    r = anonymize(text)
+    assert "Maria Muster" not in r.text
+    assert r.text == filler + "Kontakt ist [PERSON], vielen Dank."
+    assert r.text.startswith(filler[:200])  # Filler-Text bleibt unangetastet/unverschoben

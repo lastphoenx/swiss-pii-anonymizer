@@ -4,6 +4,15 @@ Ersetzt/ergänzt spaCys deutlich schwächere deutsche Standard-NER — Flair
 (flair/ner-german-large) erreicht F1 92.3 auf CoNLL-03 Deutsch (revidiert)
 und unterscheidet Personennamen zuverlässiger von Produktnamen/Komposita
 als eine reine Grossschreibungs-Heuristik.
+
+Aus PDFs extrahierter Text landet oft als ein einziger, unsegmentierter
+Fliesstext-Block (Bullet-Punkte statt echter Satzzeichen, keine
+Zeilenumbrüche) — auf solchem Text degradiert NER-Qualität spürbar, weil
+dem Modell die üblichen Satzgrenzen-Signale fehlen. Wir chunken deshalb
+über Presidios `CharacterBasedTextChunker` (dieselbe Utility, die
+`GLiNERRecognizer` in recognizers_org.py für ORGANIZATION nutzt) — das
+begrenzt das "Verwirrungsfenster" pro Vorhersage und ist für kurze Texte
+ein No-Op (ein Chunk => direkter Aufruf, unverändertes Verhalten).
 """
 from __future__ import annotations
 
@@ -11,11 +20,14 @@ import logging
 from typing import List, Optional
 
 from presidio_analyzer import EntityRecognizer, RecognizerResult
+from presidio_analyzer.chunkers import BaseTextChunker, CharacterBasedTextChunker
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
 log = logging.getLogger(__name__)
 
 DEFAULT_FLAIR_MODEL = "flair/ner-german-large"
+_DEFAULT_CHUNK_SIZE = 2000
+_DEFAULT_CHUNK_OVERLAP = 100
 
 # Flair-Tags -> Presidio-Entitätstypen. ORG standardmässig nicht aktiv,
 # weil Fachbereichs-/Organisationsnamen in diesem Kontext oft bewusst
@@ -35,6 +47,7 @@ class FlairPersonRecognizer(EntityRecognizer):
         model_name: str = DEFAULT_FLAIR_MODEL,
         entities: Optional[List[str]] = None,
         supported_language: str = "de",
+        text_chunker: Optional[BaseTextChunker] = None,
     ):
         self.model_name = model_name
         self._tagger = None
@@ -45,6 +58,9 @@ class FlairPersonRecognizer(EntityRecognizer):
             supported_language=supported_language,
         )
         self._active_tags = {tag for tag, ent in _TAG_MAP.items() if ent in wanted}
+        self.text_chunker = text_chunker or CharacterBasedTextChunker(
+            chunk_size=_DEFAULT_CHUNK_SIZE, chunk_overlap=_DEFAULT_CHUNK_OVERLAP
+        )
 
     def load(self) -> None:
         from flair.models import SequenceTagger
@@ -52,14 +68,10 @@ class FlairPersonRecognizer(EntityRecognizer):
         log.info("Lade Flair-Modell %s ...", self.model_name)
         self._tagger = SequenceTagger.load(self.model_name)
 
-    def analyze(
-        self, text: str, entities: List[str], nlp_artifacts: NlpArtifacts
-    ) -> List[RecognizerResult]:
-        if self._tagger is None:
-            self.load()
+    def _predict_chunk(self, chunk_text: str, entities: List[str]) -> List[RecognizerResult]:
         from flair.data import Sentence
 
-        sentence = Sentence(text)
+        sentence = Sentence(chunk_text)
         self._tagger.predict(sentence)
 
         results: List[RecognizerResult] = []
@@ -83,3 +95,14 @@ class FlairPersonRecognizer(EntityRecognizer):
                 )
             )
         return results
+
+    def analyze(
+        self, text: str, entities: List[str], nlp_artifacts: NlpArtifacts
+    ) -> List[RecognizerResult]:
+        if self._tagger is None:
+            self.load()
+
+        return self.text_chunker.predict_with_chunking(
+            text=text,
+            predict_func=lambda chunk_text: self._predict_chunk(chunk_text, entities),
+        )

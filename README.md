@@ -37,7 +37,10 @@ Prüfung vor der Übertragung sensibler Inhalte an Cloud-Dienste.
 | `EMAIL_ADDRESS` | Presidio (regex) | |
 | `IBAN_CODE` | Presidio (regex + ISO-7064-Prüfsumme) | international, nicht nur CH |
 | `CH_AHV_NR` | eigen (regex + EAN-13-Prüfziffer) | Format `756.NNNN.NNNN.NC` |
-| `CH_PHONE_NUMBER` | eigen (regex) | `+41`/`0041`/`0`-Präfix |
+| `CH_UID` | eigen (regex + MOD-11-Prüfziffer) | Format `CHE-NNN.NNN.NNC` (Unternehmens-ID) |
+| `CH_PHONE_NUMBER` | eigen (regex) | `+41`/`0041` (auch mit `(0)`) /`0`-Präfix |
+| `CH_ADDRESS` | eigen (regex) | Strasse + Hausnummer, optional `, PLZ Ort` |
+| `CH_LOCATION` | eigen (regex) | PLZ + Ort ohne vorangehende Strasse |
 | `DE_VAT_ID` | Presidio (regex) | deutsche USt-IdNr. (`DE` + 9 Ziffern) |
 | `DE_HANDELSREGISTER` | Presidio (regex) | HRA/HRB-Nummer |
 
@@ -47,12 +50,27 @@ Namen (`Dr.`, `Prof.`, `Prof. Dr. med.`, `Mag.`, `lic. iur.`, `Dipl.-Ing.`,
 stehen zu bleiben — `"Dr. med. Maria Muster"` wird komplett zu `[PERSON]`.
 Es entsteht bewusst kein eigener Entitätstyp dafür.
 
-Weitere Entitäten (Ort, IP-Adresse, Kreditkarte, deutscher Personalausweis/
+Weitere Entitäten (IP-Adresse, Kreditkarte, deutscher Personalausweis/
 Reisepass/Führerschein/Sozialversicherungsnummer, ...) sind über Presidios
 eingebaute Recognizer bzw. weitere GLiNER-Labels verfügbar und lassen sich
 bei Bedarf ergänzen — siehe
 [`docs/analyzer/adding_recognizers.md`](https://microsoft.github.io/presidio/analyzer/adding_recognizers/)
 und [Presidios GLiNER-Sample](https://microsoft.github.io/presidio/samples/python/gliner/).
+
+**CH_ADDRESS/CH_LOCATION** sind — anders als `CH_AHV_NR`/`CH_UID` — keine
+prüfziffervalidierten Treffer, sondern strukturelle Regex-Heuristiken
+(Strassen-Suffix + Hausnummer bzw. 4-stellige PLZ + Ortsname). Damit die
+Gross-/Kleinschreibungs-Prüfung nicht durch Presidios Standard-`IGNORECASE`
+ausgehebelt wird (z.B. "2021 bis heute" fälschlich als "PLZ + Ort"), werden
+beide Recognizer explizit case-sensitiv kompiliert.
+
+**Lange, unsegmentierte Texte:** Aus PDFs extrahierter Text landet oft als
+ein einziger Fliesstext-Block ohne echte Satzgrenzen (Bullet-Punkte statt
+Punkten, keine Zeilenumbrüche) — NER-Modelle degradieren auf solchem Text
+spürbar. `FlairPersonRecognizer` chunkt deshalb über Presidios
+`CharacterBasedTextChunker` (2000 Zeichen, 100 Überlappung) — für kurze
+Texte ein No-Op, für lange ein Sicherheitsnetz gegen ein einzelnes
+"Verwirrungsfenster" über das ganze Dokument.
 
 **Ausfallsicherheit:** Scheitert der GLiNER-Modell-Download beim ersten
 Aufruf (kein Netzwerk, Modell noch nicht im Cache), wird nur die
@@ -132,8 +150,8 @@ Testsätzen prüfen.
 - Presidios eingebauter Deutsch-Support (Kontextwörter, Standard-Recognizer)
   ist schwächer als für Englisch — deshalb hier bewusst eine eigene,
   minimale Registry statt der Presidio-Standardkonfiguration.
-- `CH_AHV_NR`/`IBAN_CODE` sind hart über Prüfziffern validiert (keine
-  Heuristik) — sehr wenige falsch-positive Treffer, dafür werden
+- `CH_AHV_NR`/`CH_UID`/`IBAN_CODE` sind hart über Prüfziffern validiert
+  (keine Heuristik) — sehr wenige falsch-positive Treffer, dafür werden
   Zahlenfolgen mit falscher Prüfziffer bewusst nicht gemeldet.
 - Automatische Filterung ist eine Vorstufe, kein Ersatz für menschliche
   Prüfung vor Cloud-Übertragung sensibler Inhalte.
@@ -144,3 +162,8 @@ Testsätzen prüfen.
 - Die Titel-Erkennung deckt gängige DACH-Titel ab (`Dr.`, `Prof.`, `Mag.`,
   `lic. iur.`, `Dipl.-Ing.`, ...), ist aber eine feste Liste, keine
   Freitext-Erkennung — seltene/ausländische Titel werden nicht erfasst.
+- `CH_ADDRESS`/`CH_LOCATION` sind reine Struktur-Heuristiken (Strassen-Suffix
+  bzw. PLZ-Bereich), keine Prüfziffer — Postfach-/Gebäude-Adressen ohne
+  Strassen-Suffix im Namen (z.B. reine Postfach-Angaben) werden nicht
+  erfasst, mehrspaltige PDF-Layouts können Strasse/PLZ/Ort beim Extrahieren
+  auseinanderreissen.
