@@ -43,6 +43,7 @@ Prüfung vor der Übertragung sensibler Inhalte an Cloud-Dienste.
 | `CH_LOCATION` | eigen (regex + amtliches PLZ-Verzeichnis) | PLZ + Ort, gegen echte Ortschaften/Gemeinden validiert |
 | `DE_VAT_ID` | Presidio (regex) | deutsche USt-IdNr. (`DE` + 9 Ziffern) |
 | `DE_HANDELSREGISTER` | Presidio (regex) | HRA/HRB-Nummer |
+| `URL` | Presidio (regex), abgesichert gegen E-Mail-Kollision | Domains/URLs, auch ohne `https://`-Präfix (z.B. `firma.com`) |
 
 **Titel:** Ein akademischer/beruflicher Titel direkt vor einem erkannten
 Namen (`Dr.`, `Prof.`, `Prof. Dr. med.`, `Mag.`, `lic. iur.`, `Dipl.-Ing.`,
@@ -56,6 +57,15 @@ eingebaute Recognizer bzw. weitere GLiNER-Labels verfügbar und lassen sich
 bei Bedarf ergänzen — siehe
 [`docs/analyzer/adding_recognizers.md`](https://microsoft.github.io/presidio/analyzer/adding_recognizers/)
 und [Presidios GLiNER-Sample](https://microsoft.github.io/presidio/samples/python/gliner/).
+
+**URL** nutzt Presidios eingebauten `UrlRecognizer`, gekapselt in
+`SafeUrlRecognizer`: Presidios "Non schema URL"-Pattern (erkennt Domains
+ohne `https://`-Präfix) kollidiert sonst mit E-Mail-Adressen — der Teil
+vor dem "@" kann zufällig wie eine eigene Domain aussehen, wenn er auf
+eine echte TLD endet (z.B. matcht `"peter.be"` aus
+`"peter.beispiel@example.com"`, weil `.be` eine gültige Landes-TLD ist —
+verifiziert, kein hypothetisches Problem). `SafeUrlRecognizer` verwirft
+Treffer, deren umgebendes zusammenhängendes Token ein `@` enthält.
 
 **CH_LOCATION** (PLZ + Ort) wird — anders als `CH_ADDRESS` — hart gegen das
 amtliche Ortschaftenverzeichnis validiert (Bundesamt für Landestopografie
