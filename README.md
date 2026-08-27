@@ -193,6 +193,18 @@ selbst. Für einen echten End-to-End-Test mit den echten Modellen:
 `scripts/prefetch_models.py` ausführen, dann manuell mit realistischen
 Testsätzen prüfen.
 
+**Flair vs. GLiNER für PERSON:** `scripts/compare_person_ner.py` vergleicht
+beide Modelle auf einer kleinen, handverlesenen Stichprobe — u.a.
+Nachnamen, die gleichzeitig gebräuchliche Substantive sind ("Kaiser",
+"Bäcker", "Fuchs", "Koch", "Schäfer", "Weber") sowie die auf einem echten
+Angebotsdokument beobachtete PERSON-Übertriggerung auf generische
+Substantive ("Kunden", "Mitarbeitende", "Administrierende"). Braucht die
+echten Modelle (Netzwerk oder gefüllter Cache, z.B. nach
+`prefetch_models.py`) — reines Diagnose-Tool, ändert nichts an der
+Paket-Logik. Ergebnis noch offen: ob GLiNER hier zusätzlich zu Flair (oder
+als Konsens-Filter) etwas bringt, muss mit echten Modell-Läufen entschieden
+werden, nicht auf Verdacht.
+
 ## Bekannte Grenzen
 
 - Presidios eingebauter Deutsch-Support (Kontextwörter, Standard-Recognizer)
