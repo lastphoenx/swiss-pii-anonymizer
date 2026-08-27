@@ -37,3 +37,41 @@ def test_location_recognizer_ignores_year_followed_by_lowercase_word():
     text = "Projektlaufzeit: Februar 2021 bis heute, Auszeichnung 2022 gewonnen."
     results = rec.analyze(text, ["CH_LOCATION"], None)
     assert results == []
+
+
+def test_location_recognizer_rejects_plausible_but_fake_combination():
+    # "1234 Wunderland" sieht strukturell wie eine PLZ+Ort-Kombination aus,
+    # ist aber keine echte Schweizer Ortschaft -- die Katalog-Validierung
+    # (nicht nur Gross/Kleinschreibung) muss das verwerfen.
+    rec = ChLocationRecognizer()
+    text = "Adresse: 1234 Wunderland."
+    results = rec.analyze(text, ["CH_LOCATION"], None)
+    assert results == []
+
+
+def test_location_recognizer_rejects_wrong_city_for_real_plz():
+    # 8001 ist eine echte PLZ (Zuerich), aber nicht fuer "Bern".
+    rec = ChLocationRecognizer()
+    text = "Adresse: 8001 Bern."
+    results = rec.analyze(text, ["CH_LOCATION"], None)
+    assert results == []
+
+
+def test_location_recognizer_finds_french_city_name():
+    rec = ChLocationRecognizer()
+    text = "Adresse: 1201 Genève."
+    results = rec.analyze(text, ["CH_LOCATION"], None)
+    matched = [text[r.start : r.end] for r in results]
+    assert "1201 Genève" in matched
+
+
+def test_location_recognizer_known_gap_generic_collector_plz():
+    # Dokumentierte Grenze (README "Bekannte Grenzen"): generische
+    # Sammel-/Postfach-PLZ ohne eigene Ortschaft (z.B. "3003 Bern", übliche
+    # Bundesverwaltungs-Adresse) fehlen im amtlichen Ortschaftenverzeichnis
+    # und werden deshalb bewusst NICHT erkannt -- Praezision vor Recall.
+    # Dieser Test dokumentiert den Status quo, kein gewuenschtes Verhalten.
+    rec = ChLocationRecognizer()
+    text = "Adresse: 3003 Bern."
+    results = rec.analyze(text, ["CH_LOCATION"], None)
+    assert results == []

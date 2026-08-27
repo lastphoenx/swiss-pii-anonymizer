@@ -40,7 +40,7 @@ Prüfung vor der Übertragung sensibler Inhalte an Cloud-Dienste.
 | `CH_UID` | eigen (regex + MOD-11-Prüfziffer) | Format `CHE-NNN.NNN.NNC` (Unternehmens-ID) |
 | `CH_PHONE_NUMBER` | eigen (regex) | `+41`/`0041` (auch mit `(0)`) /`0`-Präfix |
 | `CH_ADDRESS` | eigen (regex) | Strasse + Hausnummer, optional `, PLZ Ort` |
-| `CH_LOCATION` | eigen (regex) | PLZ + Ort ohne vorangehende Strasse |
+| `CH_LOCATION` | eigen (regex + amtliches PLZ-Verzeichnis) | PLZ + Ort, gegen echte Ortschaften/Gemeinden validiert |
 | `DE_VAT_ID` | Presidio (regex) | deutsche USt-IdNr. (`DE` + 9 Ziffern) |
 | `DE_HANDELSREGISTER` | Presidio (regex) | HRA/HRB-Nummer |
 
@@ -57,12 +57,27 @@ bei Bedarf ergänzen — siehe
 [`docs/analyzer/adding_recognizers.md`](https://microsoft.github.io/presidio/analyzer/adding_recognizers/)
 und [Presidios GLiNER-Sample](https://microsoft.github.io/presidio/samples/python/gliner/).
 
-**CH_ADDRESS/CH_LOCATION** sind — anders als `CH_AHV_NR`/`CH_UID` — keine
-prüfziffervalidierten Treffer, sondern strukturelle Regex-Heuristiken
-(Strassen-Suffix + Hausnummer bzw. 4-stellige PLZ + Ortsname). Damit die
-Gross-/Kleinschreibungs-Prüfung nicht durch Presidios Standard-`IGNORECASE`
-ausgehebelt wird (z.B. "2021 bis heute" fälschlich als "PLZ + Ort"), werden
-beide Recognizer explizit case-sensitiv kompiliert.
+**CH_LOCATION** (PLZ + Ort) wird — anders als `CH_ADDRESS` — hart gegen das
+amtliche Ortschaftenverzeichnis validiert (Bundesamt für Landestopografie
+swisstopo, "Amtliches Ortschaftenverzeichnis mit Postleitzahl und
+Perimeter", monatlich aktualisiert). Die Zuordnung liegt vorverarbeitet in
+`src/swiss_pii_anonymizer/data/ch_plz.json` (~3'200 PLZ, DE/FR/IT/RM) —
+kein Netzwerkzugriff zur Laufzeit nötig. Ein Regex-Fund wie "1234
+Wunderland" oder "8001 Bern" (echte PLZ, falscher Ort) wird verworfen,
+nicht nur nach Gross-/Kleinschreibung gefiltert. Neu generieren bei einer
+swisstopo-Aktualisierung: `scripts/build_ch_plz_data.py <heruntergeladene
+CSV>` (Download-Seite:
+[swisstopo.admin.ch/amtliches-ortschaftenverzeichnis](https://www.swisstopo.admin.ch/de/amtliches-ortschaftenverzeichnis),
+CSV-Variante, Koordinatensystem egal — wir nutzen nur Namensspalten).
+
+**CH_ADDRESS** (Strasse + Hausnummer) bleibt eine strukturelle
+Regex-Heuristik ohne Katalog-Validierung — ein Nicht-Treffer bei der
+optionalen ", PLZ Ort"-Endung würde sonst den ganzen (gut über den
+Strassen-Suffix verankerten) Adressfund verwerfen. Damit die
+Gross-/Kleinschreibungs-Prüfung bei beiden Recognizern nicht durch
+Presidios Standard-`IGNORECASE` ausgehebelt wird (z.B. "2021 bis heute"
+fälschlich als "PLZ + Ort"), werden beide explizit case-sensitiv
+kompiliert.
 
 **Lange, unsegmentierte Texte:** Aus PDFs extrahierter Text landet oft als
 ein einziger Fliesstext-Block ohne echte Satzgrenzen (Bullet-Punkte statt
@@ -152,7 +167,8 @@ Testsätzen prüfen.
   minimale Registry statt der Presidio-Standardkonfiguration.
 - `CH_AHV_NR`/`CH_UID`/`IBAN_CODE` sind hart über Prüfziffern validiert
   (keine Heuristik) — sehr wenige falsch-positive Treffer, dafür werden
-  Zahlenfolgen mit falscher Prüfziffer bewusst nicht gemeldet.
+  Zahlenfolgen mit falscher Prüfziffer bewusst nicht gemeldet. `CH_LOCATION`
+  ist analog hart über das amtliche PLZ-Verzeichnis validiert (s.u.).
 - Automatische Filterung ist eine Vorstufe, kein Ersatz für menschliche
   Prüfung vor Cloud-Übertragung sensibler Inhalte.
 - `ORGANIZATION` (GLiNER, Zero-Shot) ist anders als die Prüfziffer-Recognizer
@@ -162,8 +178,29 @@ Testsätzen prüfen.
 - Die Titel-Erkennung deckt gängige DACH-Titel ab (`Dr.`, `Prof.`, `Mag.`,
   `lic. iur.`, `Dipl.-Ing.`, ...), ist aber eine feste Liste, keine
   Freitext-Erkennung — seltene/ausländische Titel werden nicht erfasst.
-- `CH_ADDRESS`/`CH_LOCATION` sind reine Struktur-Heuristiken (Strassen-Suffix
-  bzw. PLZ-Bereich), keine Prüfziffer — Postfach-/Gebäude-Adressen ohne
-  Strassen-Suffix im Namen (z.B. reine Postfach-Angaben) werden nicht
-  erfasst, mehrspaltige PDF-Layouts können Strasse/PLZ/Ort beim Extrahieren
-  auseinanderreissen.
+- `CH_ADDRESS` bleibt eine reine Struktur-Heuristik (Strassen-Suffix +
+  Hausnummer), keine Katalog-Validierung — Postfach-/Gebäude-Adressen ohne
+  Strassen-Suffix im Namen werden nicht erfasst, mehrspaltige PDF-Layouts
+  können Strasse/PLZ/Ort beim Extrahieren auseinanderreissen.
+- `CH_LOCATION`-Regex-Kandidaten decken nur bis zu zwei durchgehend
+  grossgeschriebene Wörter ab (z.B. nicht kantons-disambiguierte Namen wie
+  "St-Sulpice VD", da "VD" komplett grossgeschrieben ist) — echte
+  Doppelnamen mit Bindestrich (z.B. "Chavannes-près-Renens") funktionieren.
+- Das amtliche Ortschaftenverzeichnis (swisstopo) deckt nur Orte mit
+  fester geografischer Zuordnung ab — generische Sammel-/Postfach-PLZ ohne
+  eigene Ortschaft (z.B. "3000"/"3003 Bern", "4000 Basel", "8000 Zürich",
+  "6000 Luzern" — üblich in Behörden-/Geschäftskorrespondenz) fehlen im
+  Datensatz und werden deshalb **nicht** als `CH_LOCATION` erkannt, obwohl
+  sie gültige Adressen sind. Ein Fallback über "häufigster Ortsname im
+  PLZ-Hunderterblock" wurde geprüft und wieder verworfen: die Dominanz
+  schwankt stark (z.B. Zürich/Basel >75 % im eigenen Block, Bern/Luzern nur
+  ~10-17 %, weil deren Blöcke viele Nachbargemeinden mitabdecken) — zu
+  unzuverlässig für eine harte Validierung. Bis eine bessere Quelle
+  (z.B. Die Post führt separat ein eigenes `PLZ_Verzeichnis`, das diese
+  Sammelcodes evtl. abdeckt) eingebunden ist, bleibt das eine bekannte
+  Lücke zugunsten von Präzision statt Recall.
+- Das amtliche PLZ-Verzeichnis (`data/ch_plz.json`) ist eine Momentaufnahme
+  (Stand: manueller Download von swisstopo) und wird nicht automatisch
+  aktualisiert — bei Gemeindefusionen o.ä. `scripts/build_ch_plz_data.py`
+  mit einer neuen swisstopo-CSV erneut ausführen. Lizenzbedingungen der
+  swisstopo-Daten vor einer Weiterverbreitung des Pakets prüfen.

@@ -21,3 +21,6 @@ test = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+swiss_pii_anonymizer = ["data/*.json"]

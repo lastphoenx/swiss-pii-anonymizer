@@ -1,12 +1,16 @@
 """Regex-Recognizer für Schweizer Postadressen (Strasse+Nr., PLZ+Ort).
 
-Anders als CH_AHV_NR/CH_UID gibt es hier keine Prüfziffer — die Erkennung
-stützt sich auf strukturelle Signale (Strassen-Suffix + Hausnummer bzw.
-4-stellige PLZ + grossgeschriebener Ortsname), nicht auf eine reine
-Grossschreibungs-Heuristik (die Firmennamen fälschlicherweise träfe, siehe
-README "Warum nicht nur Regex?"). Das ist trotzdem eine Wahrscheinlichkeits-
-schätzung, kein hartes Kriterium — falsch-positive Treffer sind möglich
-(z.B. eine Jahreszahl gefolgt von einem grossgeschriebenen Wort).
+`CH_LOCATION` (PLZ + Ort) wird hart gegen das amtliche
+Ortschaftenverzeichnis (swisstopo, siehe plz_catalog.py) validiert —
+dieselbe "Prüfung statt Vermutung"-Philosophie wie bei
+`CH_AHV_NR`/`CH_UID`, nur per Lookup statt Prüfziffer. Ein Regex-Fund, der
+keiner echten PLZ+Ort-Kombination entspricht, wird verworfen.
+
+`CH_ADDRESS` (Strasse + Hausnummer) bleibt eine strukturelle Heuristik ohne
+Katalog-Validierung: die optionale ", PLZ Ort"-Endung würde sonst bei einem
+Nicht-Treffer den GANZEN Fund verwerfen (inkl. des bereits gut verankerten
+Strassennamens) — das Risiko einer nicht erkannten echten Adresse wiegt
+hier schwerer als ein gelegentlicher Fehltreffer bei der Stadt-Endung.
 """
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ import re
 from typing import List, Optional
 
 from presidio_analyzer import Pattern, PatternRecognizer
+
+from .plz_catalog import is_known_ch_location
 
 # Presidios PatternRecognizer kompiliert Patterns standardmässig mit
 # re.IGNORECASE — das würde hier die Gross/Kleinschreibungs-Prüfung
@@ -26,6 +32,14 @@ _STREET_SUFFIX = (
     r"(?:strasse|straße|str\.|gasse|weg|platz|allee|ring|quai|rain|halde|matte)"
 )
 
+# Schweizer Ortsnamen sind mehrsprachig (DE/FR/IT/RM) — Umlaute und
+# französische/italienische Akzente werden hier ausdrücklich zugelassen,
+# damit z.B. "Genève" oder "Chavannes-près-Renens" als eine Einheit
+# matchen (nicht nur der deutsche Zeichensatz).
+_UPPER_CHARS = "A-ZÄÖÜÀÂÇÈÉÊËÎÏÔÙÛŸŒ"
+_LOWER_CHARS = "a-zäöüßàâçèéêëîïôùûÿœ'-"
+_PROPER_WORD = rf"[{_UPPER_CHARS}][{_LOWER_CHARS}]+"
+
 
 class ChAddressRecognizer(PatternRecognizer):
     """Strasse + Hausnummer, optional gefolgt von ', PLZ Ort'."""
@@ -34,7 +48,7 @@ class ChAddressRecognizer(PatternRecognizer):
         Pattern(
             "CH-Adresse (Strasse + Nr., optional PLZ + Ort)",
             r"\b[A-ZÄÖÜ][\wäöüß.-]*" + _STREET_SUFFIX + r"\s+\d{1,4}[a-zA-Z]?\b"
-            r"(?:,?\s*\d{4}\s+[A-ZÄÖÜ][a-zäöüß-]+(?:\s+[A-ZÄÖÜ][a-zäöüß-]+)?)?",
+            rf"(?:,?\s*\d{{4}}\s+{_PROPER_WORD}(?:\s+{_PROPER_WORD})?)?",
             0.5,
         ),
     ]
@@ -59,14 +73,15 @@ class ChAddressRecognizer(PatternRecognizer):
 class ChLocationRecognizer(PatternRecognizer):
     """4-stellige PLZ + Ortsname ohne vorangehende Strasse (z.B. reine Absenderzeile).
 
-    Schwächeres Signal als ChAddressRecognizer (kein Strassen-Suffix als
-    Anker) — entsprechend niedrigerer Basis-Score, angehoben durch Kontext.
+    Hart validiert gegen das amtliche Ortschaftenverzeichnis (siehe
+    plz_catalog.py) — kein Fehltreffer wie "2021 bis heute" oder eine
+    beliebige PLZ+Wort-Kombination möglich, nur echte PLZ+Ort-Paare.
     """
 
     PATTERNS = [
         Pattern(
             "CH-PLZ + Ort",
-            r"\b(?:CH-)?\d{4}\s+[A-ZÄÖÜ][a-zäöüß-]+(?:\s+[A-ZÄÖÜ][a-zäöüß-]+)?\b",
+            rf"\b(?:CH-)?\d{{4}}\s+{_PROPER_WORD}(?:\s+{_PROPER_WORD})?\b",
             0.4,
         ),
     ]
@@ -86,3 +101,13 @@ class ChLocationRecognizer(PatternRecognizer):
             supported_language=supported_language,
             global_regex_flags=_CASE_SENSITIVE_FLAGS,
         )
+
+    def validate_result(self, pattern_text: str) -> Optional[bool]:
+        digits = re.search(r"\d{4}", pattern_text)
+        if not digits:
+            return False
+        plz = digits.group()
+        name = pattern_text[digits.end() :].strip(" ,")
+        if not name:
+            return False
+        return is_known_ch_location(plz, name)
