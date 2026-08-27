@@ -19,6 +19,7 @@ DEFAULT_ENTITIES = (
     "CH_UID",
     "CH_ADDRESS",
     "CH_LOCATION",
+    "URL",
 )
 
 _analyzer = None  # lazy Singleton — Modelle nur einmal pro Prozess laden
@@ -53,6 +54,7 @@ def _build_analyzer(flair_model: str, gliner_model: str):
     from .recognizers_address import ChAddressRecognizer, ChLocationRecognizer
     from .recognizers_ch import ChAhvRecognizer, ChPhoneRecognizer, ChUidRecognizer
     from .recognizers_org import build_organization_recognizer
+    from .recognizers_url import SafeUrlRecognizer
 
     configuration = {
         "nlp_engine_name": "spacy",
@@ -63,6 +65,7 @@ def _build_analyzer(flair_model: str, gliner_model: str):
     registry = RecognizerRegistry(supported_languages=["de"])
     registry.add_recognizer(EmailRecognizer(supported_language="de"))
     registry.add_recognizer(IbanRecognizer(supported_language="de"))
+    registry.add_recognizer(SafeUrlRecognizer(supported_language="de"))
     registry.add_recognizer(ChAhvRecognizer())
     registry.add_recognizer(ChPhoneRecognizer())
     registry.add_recognizer(ChUidRecognizer())

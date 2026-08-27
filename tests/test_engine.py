@@ -117,3 +117,11 @@ def test_long_unsegmented_text_keeps_correct_offsets(fake_flair):
     assert "Maria Muster" not in r.text
     assert r.text == filler + "Kontakt ist [PERSON], vielen Dank."
     assert r.text.startswith(filler[:200])  # Filler-Text bleibt unangetastet/unverschoben
+
+
+def test_url_redacted_without_breaking_email(fake_flair):
+    text = "Web: appswithlove.com, Mail: hans.mueller@appswithlove.com."
+    r = anonymize(text)
+    assert "appswithlove.com" not in r.text
+    types = {f.entity_type for f in r.findings}
+    assert types == {"URL", "EMAIL_ADDRESS"}
