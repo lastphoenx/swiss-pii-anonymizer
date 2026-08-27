@@ -13,6 +13,12 @@ DEFAULT_ENTITIES = (
     "IBAN_CODE",
     "CH_AHV_NR",
     "CH_PHONE_NUMBER",
+    "ORGANIZATION",
+    "DE_VAT_ID",
+    "DE_HANDELSREGISTER",
+    "CH_UID",
+    "CH_ADDRESS",
+    "CH_LOCATION",
 )
 
 _analyzer = None  # lazy Singleton — Modelle nur einmal pro Prozess laden
@@ -33,13 +39,20 @@ class AnonymizeResult:
     findings: list[Finding]
 
 
-def _build_analyzer(flair_model: str):
+def _build_analyzer(flair_model: str, gliner_model: str):
     from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
     from presidio_analyzer.nlp_engine import NlpEngineProvider
-    from presidio_analyzer.predefined_recognizers import EmailRecognizer, IbanRecognizer
+    from presidio_analyzer.predefined_recognizers import (
+        DeHandelsregisterRecognizer,
+        DeVatIdRecognizer,
+        EmailRecognizer,
+        IbanRecognizer,
+    )
 
     from .nlp_flair import FlairPersonRecognizer
-    from .recognizers_ch import ChAhvRecognizer, ChPhoneRecognizer
+    from .recognizers_address import ChAddressRecognizer, ChLocationRecognizer
+    from .recognizers_ch import ChAhvRecognizer, ChPhoneRecognizer, ChUidRecognizer
+    from .recognizers_org import build_organization_recognizer
 
     configuration = {
         "nlp_engine_name": "spacy",
@@ -52,7 +65,17 @@ def _build_analyzer(flair_model: str):
     registry.add_recognizer(IbanRecognizer(supported_language="de"))
     registry.add_recognizer(ChAhvRecognizer())
     registry.add_recognizer(ChPhoneRecognizer())
+    registry.add_recognizer(ChUidRecognizer())
+    registry.add_recognizer(ChAddressRecognizer())
+    registry.add_recognizer(ChLocationRecognizer())
+    registry.add_recognizer(DeVatIdRecognizer())
+    registry.add_recognizer(DeHandelsregisterRecognizer())
     registry.add_recognizer(FlairPersonRecognizer(model_name=flair_model))
+    # GLiNER-basierte Organisationserkennung — fällt bei Lade-/Inferenzfehlern
+    # (fehlendes Paket, kein Netzwerk beim ersten Modell-Download, ...) still
+    # auf "keine ORGANIZATION-Treffer" zurück, statt den ganzen Analyzer zu
+    # blockieren (siehe recognizers_org.SafeGLiNERRecognizer).
+    registry.add_recognizer(build_organization_recognizer(gliner_model))
 
     return AnalyzerEngine(
         registry=registry,
@@ -61,11 +84,13 @@ def _build_analyzer(flair_model: str):
     )
 
 
-def get_analyzer(flair_model: str = "flair/ner-german-large"):
-    """Lazy-Singleton — Flair-/spaCy-Modelle werden erst beim ersten Aufruf geladen."""
+def get_analyzer(flair_model: str = "flair/ner-german-large", gliner_model: str = None):
+    """Lazy-Singleton — Flair-/spaCy-/GLiNER-Modelle werden erst beim ersten Aufruf geladen."""
     global _analyzer
     if _analyzer is None:
-        _analyzer = _build_analyzer(flair_model)
+        from .recognizers_org import DEFAULT_GLINER_MODEL
+
+        _analyzer = _build_analyzer(flair_model, gliner_model or DEFAULT_GLINER_MODEL)
     return _analyzer
 
 
@@ -78,6 +103,8 @@ def analyze(
     """Nur Erkennung, keine Veränderung des Texts — z.B. für Vorschau/Bestätigung im UI."""
     if not text or not text.strip():
         return []
+    from .recognizers_titles import merge_titles
+
     analyzer = get_analyzer()
     ents = list(entities) if entities is not None else list(DEFAULT_ENTITIES)
     results = analyzer.analyze(
@@ -86,6 +113,7 @@ def analyze(
         language=language,
         score_threshold=score_threshold,
     )
+    results = merge_titles(text, results)
     return [
         Finding(entity_type=r.entity_type, start=r.start, end=r.end, text=text[r.start : r.end], score=r.score)
         for r in results
@@ -106,6 +134,8 @@ def anonymize(
     from presidio_anonymizer import AnonymizerEngine
     from presidio_anonymizer.entities import OperatorConfig
 
+    from .recognizers_titles import merge_titles
+
     analyzer = get_analyzer()
     ents = list(entities) if entities is not None else list(DEFAULT_ENTITIES)
     raw_results = analyzer.analyze(
@@ -114,6 +144,7 @@ def anonymize(
         language=language,
         score_threshold=score_threshold,
     )
+    raw_results = merge_titles(text, raw_results)
     if not raw_results:
         return AnonymizeResult(text=text, findings=[])
 

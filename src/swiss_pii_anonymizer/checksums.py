@@ -33,6 +33,34 @@ def is_valid_ahv(value: str) -> bool:
     return expected == int(digits[12])
 
 
+_CH_UID_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4)
+
+
+def ch_uid_check_digit(eight_digits: str) -> int:
+    """UID-Prüfziffer (MOD 11, Gewichte 5/4/3/2/7/6/5/4) über die ersten 8 Ziffern.
+
+    Referenz: python-stdnum stdnum.ch.uid.calc_check_digit — offiziell
+    dokumentierter Berechnungsweg für die Schweizer
+    Unternehmens-Identifikationsnummer (UID).
+    """
+    if len(eight_digits) != 8 or not eight_digits.isdigit():
+        raise ValueError("Erwarte genau 8 Ziffern.")
+    total = sum(int(ch) * w for ch, w in zip(eight_digits, _CH_UID_WEIGHTS))
+    return (11 - total) % 11
+
+
+def is_valid_ch_uid(value: str) -> bool:
+    """Schweizer UID (Unternehmens-Identifikationsnummer): CHE-NNN.NNN.NNC, MOD-11-Prüfziffer."""
+    digits = _digits_only(value)
+    if len(digits) != 9:
+        return False
+    try:
+        expected = ch_uid_check_digit(digits[:8])
+    except ValueError:
+        return False
+    return expected == int(digits[8])
+
+
 def iban_mod97_valid(value: str) -> bool:
     """ISO 7064 MOD 97-10 — Standard-IBAN-Prüfsumme (länderunabhängig)."""
     iban = re.sub(r"\s+", "", value or "").upper()

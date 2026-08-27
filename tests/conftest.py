@@ -54,3 +54,36 @@ def fake_flair(monkeypatch):
     engine._analyzer = None
     yield
     engine._analyzer = None
+
+
+KNOWN_ORGS = {"Beispiel AG", "Muster GmbH"}
+
+
+class _FakeGliner:
+    def predict_entities(self, text, labels, flat_ner=True, threshold=0.3, multi_label=False):
+        preds = []
+        for name in KNOWN_ORGS:
+            i = text.find(name)
+            if i >= 0:
+                preds.append({"label": "organization", "start": i, "end": i + len(name), "score": 0.9, "text": name})
+        return preds
+
+
+@pytest.fixture(autouse=True)
+def fake_gliner(monkeypatch):
+    """Ersetzt SafeGLiNERRecognizer.load durch einen Fake — kein Netzwerkzugriff/Modell-Download.
+
+    Autouse, damit KEIN Test versehentlich versucht, das echte GLiNER-Modell
+    von Hugging Face zu laden (langsam/netzwerkabhängig). Deckt zusammen mit
+    `fake_flair` die komplette Registry ab, ohne dass jeder Test beide
+    Fixtures einzeln anfordern muss.
+    """
+    from swiss_pii_anonymizer.recognizers_org import SafeGLiNERRecognizer
+
+    monkeypatch.setattr(SafeGLiNERRecognizer, "load", lambda self: setattr(self, "gliner", _FakeGliner()))
+
+    from swiss_pii_anonymizer import engine
+
+    engine._analyzer = None
+    yield
+    engine._analyzer = None

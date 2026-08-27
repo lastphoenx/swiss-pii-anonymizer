@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from swiss_pii_anonymizer.recognizers_ch import ChAhvRecognizer, ChPhoneRecognizer
+from swiss_pii_anonymizer.recognizers_ch import ChAhvRecognizer, ChPhoneRecognizer, ChUidRecognizer
 
 
 def test_ahv_recognizer_finds_valid_and_skips_invalid():
@@ -21,3 +21,20 @@ def test_phone_recognizer_finds_ch_number():
     results = rec.analyze(text, ["CH_PHONE_NUMBER"], None)
     matched = [text[r.start : r.end] for r in results]
     assert len(matched) == 2
+
+
+def test_phone_recognizer_finds_number_with_parenthetical_trunk_zero():
+    rec = ChPhoneRecognizer()
+    text = "Kontakt: +41 (0)31 333 01 51."
+    results = rec.analyze(text, ["CH_PHONE_NUMBER"], None)
+    matched = [text[r.start : r.end] for r in results]
+    assert "+41 (0)31 333 01 51" in matched
+
+
+def test_uid_recognizer_finds_valid_and_skips_invalid():
+    rec = ChUidRecognizer()
+    text = "Gültig: CHE-116.281.710. Ungültig: CHE-116.281.711."
+    results = rec.analyze(text, ["CH_UID"], None)
+    matched = [text[r.start : r.end] for r in results]
+    assert "CHE-116.281.710" in matched
+    assert "CHE-116.281.711" not in matched
