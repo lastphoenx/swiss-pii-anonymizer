@@ -22,9 +22,21 @@ from presidio_analyzer import RecognizerResult
 from presidio_analyzer.nlp_engine import NlpArtifacts
 from presidio_analyzer.predefined_recognizers import GLiNERRecognizer
 
+from .chunking import SentenceAwareTextChunker
+
 log = logging.getLogger(__name__)
 
 DEFAULT_GLINER_MODEL = "urchade/gliner_multi_pii-v1"
+# Presidios GLiNERRecognizer-Default (chunk_size=250) ist sehr knapp bemessen
+# und schneidet auf echtem Fliesstext regelmässig mitten in zusammengesetzte
+# deutsche Wörter (beobachtet: "Ser[ORGANIZATION]" statt "Service"). Wir
+# nutzen denselben SentenceAwareTextChunker wie Flair (siehe chunking.py und
+# nlp_flair.py) — der schneidet nie mitten im Wort. Bewusst kleiner als
+# Flairs Chunk-Grösse gehalten, da wir das genaue Token-Limit des
+# GLiNER-Modells nicht verifizieren konnten (kein Netzwerkzugriff zur
+# Modell-Konfiguration in dieser Umgebung) und lieber vorsichtig bleiben.
+_DEFAULT_CHUNK_SIZE = 1000
+_DEFAULT_CHUNK_OVERLAP = 100
 
 
 class SafeGLiNERRecognizer(GLiNERRecognizer):
@@ -65,4 +77,7 @@ def build_organization_recognizer(model_name: str = DEFAULT_GLINER_MODEL) -> Saf
         entity_mapping={"organization": "ORGANIZATION"},
         supported_language="de",
         name=f"GLiNER ORGANIZATION ({model_name})",
+        text_chunker=SentenceAwareTextChunker(
+            chunk_size=_DEFAULT_CHUNK_SIZE, chunk_overlap=_DEFAULT_CHUNK_OVERLAP
+        ),
     )

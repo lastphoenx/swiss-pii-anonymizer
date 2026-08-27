@@ -9,10 +9,12 @@ Aus PDFs extrahierter Text landet oft als ein einziger, unsegmentierter
 Fliesstext-Block (Bullet-Punkte statt echter Satzzeichen, keine
 Zeilenumbrüche) — auf solchem Text degradiert NER-Qualität spürbar, weil
 dem Modell die üblichen Satzgrenzen-Signale fehlen. Wir chunken deshalb
-über Presidios `CharacterBasedTextChunker` (dieselbe Utility, die
-`GLiNERRecognizer` in recognizers_org.py für ORGANIZATION nutzt) — das
-begrenzt das "Verwirrungsfenster" pro Vorhersage und ist für kurze Texte
-ein No-Op (ein Chunk => direkter Aufruf, unverändertes Verhalten).
+über `chunking.SentenceAwareTextChunker` — begrenzt das
+"Verwirrungsfenster" pro Vorhersage, schneidet nie mitten in ein Wort
+(anders als Presidios `CharacterBasedTextChunker`, siehe chunking.py) und
+bevorzugt echte Satzgrenzen für mehr zusammenhängenden Kontext pro Chunk.
+Für kurze Texte ein No-Op (ein Chunk => direkter Aufruf, unverändertes
+Verhalten).
 """
 from __future__ import annotations
 
@@ -20,14 +22,16 @@ import logging
 from typing import List, Optional
 
 from presidio_analyzer import EntityRecognizer, RecognizerResult
-from presidio_analyzer.chunkers import BaseTextChunker, CharacterBasedTextChunker
+from presidio_analyzer.chunkers import BaseTextChunker
 from presidio_analyzer.nlp_engine import NlpArtifacts
+
+from .chunking import SentenceAwareTextChunker
 
 log = logging.getLogger(__name__)
 
 DEFAULT_FLAIR_MODEL = "flair/ner-german-large"
 _DEFAULT_CHUNK_SIZE = 2000
-_DEFAULT_CHUNK_OVERLAP = 100
+_DEFAULT_CHUNK_OVERLAP = 200
 
 # Flair-Tags -> Presidio-Entitätstypen. ORG standardmässig nicht aktiv,
 # weil Fachbereichs-/Organisationsnamen in diesem Kontext oft bewusst
@@ -58,7 +62,7 @@ class FlairPersonRecognizer(EntityRecognizer):
             supported_language=supported_language,
         )
         self._active_tags = {tag for tag, ent in _TAG_MAP.items() if ent in wanted}
-        self.text_chunker = text_chunker or CharacterBasedTextChunker(
+        self.text_chunker = text_chunker or SentenceAwareTextChunker(
             chunk_size=_DEFAULT_CHUNK_SIZE, chunk_overlap=_DEFAULT_CHUNK_OVERLAP
         )
 

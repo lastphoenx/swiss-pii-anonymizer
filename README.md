@@ -82,10 +82,33 @@ kompiliert.
 **Lange, unsegmentierte Texte:** Aus PDFs extrahierter Text landet oft als
 ein einziger Fliesstext-Block ohne echte Satzgrenzen (Bullet-Punkte statt
 Punkten, keine Zeilenumbrüche) — NER-Modelle degradieren auf solchem Text
-spürbar. `FlairPersonRecognizer` chunkt deshalb über Presidios
-`CharacterBasedTextChunker` (2000 Zeichen, 100 Überlappung) — für kurze
-Texte ein No-Op, für lange ein Sicherheitsnetz gegen ein einzelnes
+spürbar. `FlairPersonRecognizer` und der GLiNER-ORGANIZATION-Recognizer
+chunken deshalb beide über `chunking.SentenceAwareTextChunker` (Flair:
+2000 Zeichen/200 Überlappung, GLiNER: 1000/100) — für kurze Texte ein
+No-Op, für lange ein Sicherheitsnetz gegen ein einzelnes
 "Verwirrungsfenster" über das ganze Dokument.
+
+Wir nutzen dafür **nicht** Presidios eingebauten `CharacterBasedTextChunker`
+(den GLiNER standardmässig verwendet): der verlängert nur das Ende eines
+Chunks bis zur nächsten Wortgrenze, nicht aber den Anfang des nächsten —
+auf echtem PDF-Text führte das reproduzierbar zu abgetrennten
+Wort-Fragmenten am Chunk-Anfang (z.B. `"Ser[ORGANIZATION]"` statt
+`"Service"`, `"Individualso[ORGANIZATION]"` statt `"Individualsoftware"`,
+weil ein Modell ein isoliertes Wortfragment als eigene Entität
+interpretierte). `SentenceAwareTextChunker` schneidet nie mitten in ein
+Wort (Start *und* Ende werden auf Wortgrenzen gezogen) und bevorzugt echte
+Satzgrenzen (`. ! ?`) im Suchfenster um die Ziel-Chunkgrösse, wenn
+vorhanden — mehr zusammenhängender Satzkontext pro Chunk reduziert
+Fehltreffer wie generische Substantive, die als `PERSON` erkannt werden.
+
+Die Chunk-Grössen sind bewusst moderat: `flair/ner-german-large` basiert
+auf `xlm-roberta-large`, dessen Transformer-Positionsembeddings (wie bei
+der ganzen RoBERTa-Familie) bei 512 Tokens enden — ein Chunk, der das
+überschreitet, würde vom Modell intern still abgeschnitten, ohne dass wir
+das an unseren Chunk-Grenzen sähen. Für GLiNER (`urchade/gliner_multi_pii-v1`)
+konnten wir das exakte Token-Limit nicht verifizieren (kein
+Netzwerkzugriff auf die Modell-Config in unserer Entwicklungsumgebung) —
+deshalb dort bewusst kleiner als bei Flair gehalten.
 
 **Ausfallsicherheit:** Scheitert der GLiNER-Modell-Download beim ersten
 Aufruf (kein Netzwerk, Modell noch nicht im Cache), wird nur die
@@ -204,3 +227,11 @@ Testsätzen prüfen.
   aktualisiert — bei Gemeindefusionen o.ä. `scripts/build_ch_plz_data.py`
   mit einer neuen swisstopo-CSV erneut ausführen. Lizenzbedingungen der
   swisstopo-Daten vor einer Weiterverbreitung des Pakets prüfen.
+- `SentenceAwareTextChunker` (siehe oben) behebt nachweislich das
+  Wort-Fragment-Problem an Chunk-Grenzen (reproduziert und getestet, siehe
+  `tests/test_chunking.py`). Ob er die auf einem echten Angebots-PDF
+  beobachtete PERSON-Übererkennung auf generische Substantive (z.B.
+  "Menschen", "Kund\*innen" als `[PERSON]`) tatsächlich reduziert, ist
+  **plausibel, aber in dieser Entwicklungsumgebung nicht mit dem echten
+  Flair-Modell verifiziert** (nur mit einem Fake-Tagger getestet, s.
+  `tests/conftest.py`) — das bleibt an echten Dokumenten zu beobachten.
