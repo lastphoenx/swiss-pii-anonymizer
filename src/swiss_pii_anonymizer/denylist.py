@@ -40,6 +40,13 @@ _GENERIC_TERMS = {
     "teilnehmer", "teilnehmern", "teilnehmerin", "teilnehmerinnen",
     "endnutzer", "enduser",
     "fachkraft", "fachkräfte", "führungskraft", "führungskräfte",
+    "gruppe", "gruppen", "team", "teams",
+    "kandidat", "kandidaten", "kandidatin", "kandidatinnen",
+    "bewerber", "bewerbern", "bewerberin", "bewerberinnen",
+    "ansprechpartner", "ansprechpartnern", "ansprechpartnerin", "ansprechpartnerinnen",
+    "ansprechperson", "ansprechpersonen",
+    "person", "personen",
+    "vertreter", "vertretern", "vertreterin", "vertreterinnen",
     # Partizip-I-Nominalisierungen ("-end-")
     "mitarbeitende", "mitarbeitenden",
     "nutzende", "nutzenden",

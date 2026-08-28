@@ -13,6 +13,11 @@ def test_known_generic_terms_recognized():
         assert is_generic_term(word), word
 
 
+def test_role_noun_terms_recognized():
+    for word in ["Gruppe", "Team", "Kandidaten", "Bewerberin", "Ansprechpartner", "Ansprechperson", "Personen"]:
+        assert is_generic_term(word), word
+
+
 def test_gender_star_and_colon_normalized():
     assert is_generic_term("Kund*innen")
     assert is_generic_term("Kund:innen")
