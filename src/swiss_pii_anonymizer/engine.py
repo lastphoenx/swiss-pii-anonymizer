@@ -106,6 +106,7 @@ def analyze(
     """Nur Erkennung, keine Veränderung des Texts — z.B. für Vorschau/Bestätigung im UI."""
     if not text or not text.strip():
         return []
+    from .denylist import filter_generic_person_terms
     from .recognizers_titles import merge_titles
 
     analyzer = get_analyzer()
@@ -116,6 +117,7 @@ def analyze(
         language=language,
         score_threshold=score_threshold,
     )
+    results = filter_generic_person_terms(text, results)
     results = merge_titles(text, results)
     return [
         Finding(entity_type=r.entity_type, start=r.start, end=r.end, text=text[r.start : r.end], score=r.score)
@@ -137,6 +139,7 @@ def anonymize(
     from presidio_anonymizer import AnonymizerEngine
     from presidio_anonymizer.entities import OperatorConfig
 
+    from .denylist import filter_generic_person_terms
     from .recognizers_titles import merge_titles
 
     analyzer = get_analyzer()
@@ -147,6 +150,7 @@ def anonymize(
         language=language,
         score_threshold=score_threshold,
     )
+    raw_results = filter_generic_person_terms(text, raw_results)
     raw_results = merge_titles(text, raw_results)
     if not raw_results:
         return AnonymizeResult(text=text, findings=[])

@@ -119,6 +119,18 @@ def test_long_unsegmented_text_keeps_correct_offsets(fake_flair):
     assert r.text.startswith(filler[:200])  # Filler-Text bleibt unangetastet/unverschoben
 
 
+def test_generic_noun_not_redacted_as_person(fake_flair):
+    # Regression: "Mitarbeitende" wurde auf einem echten Angebotsdokument
+    # von Flair faelschlich als PERSON erkannt (deutsche
+    # Partizip-I-Nominalisierung, kein Eigenname). Fake-Tagger simuliert
+    # diesen Fehltreffer (siehe conftest.KNOWN_NAMES), die Denyliste muss
+    # ihn herausfiltern.
+    text = "Alle Mitarbeitende erhalten eine Schulung."
+    r = anonymize(text)
+    assert r.text == text
+    assert r.findings == []
+
+
 def test_url_redacted_without_breaking_email(fake_flair):
     text = "Web: appswithlove.com, Mail: hans.mueller@appswithlove.com."
     r = anonymize(text)

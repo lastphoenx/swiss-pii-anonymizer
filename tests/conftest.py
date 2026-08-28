@@ -7,7 +7,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-KNOWN_NAMES = {"Maria Muster": "PER", "Peter Meier": "PER", "Anna Keller": "PER", "Hans Zimmer": "PER"}
+KNOWN_NAMES = {
+    "Maria Muster": "PER",
+    "Peter Meier": "PER",
+    "Anna Keller": "PER",
+    "Hans Zimmer": "PER",
+    # Simuliert einen auf echtem Realtext beobachteten Flair-Fehltreffer
+    # (generisches Substantiv fälschlich als PERSON erkannt) für
+    # test_denylist_filters_generic_term_from_flair_output.
+    "Mitarbeitende": "PER",
+}
 
 
 class _FakeSpan:

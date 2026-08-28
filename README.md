@@ -45,6 +45,16 @@ Prüfung vor der Übertragung sensibler Inhalte an Cloud-Dienste.
 | `DE_HANDELSREGISTER` | Presidio (regex) | HRA/HRB-Nummer |
 | `URL` | Presidio (regex), abgesichert gegen E-Mail-Kollision | Domains/URLs, auch ohne `https://`-Präfix (z.B. `firma.com`) |
 
+**Denyliste generischer Substantive:** Flair markiert auf unordentlichem
+Realtext (PDF-Extrakte ohne saubere Satzgrenzen) gelegentlich deutsche
+Partizip-I-Nominalisierungen ("Mitarbeitende", "Studierende", "Reisende",
+...) und gebräuchliche Kollektiv-Substantive ("Kunden", "Menschen", ...)
+fälschlich als `PERSON` — beobachtet auf einem echten Angebotsdokument.
+`denylist.py` filtert eine explizite, konservative Liste bekannter
+Fehltreffer heraus (keine Regel wie "endet auf -ende", das würde z.B. den
+echten Nachnamen "Ende" fälschlich verwerfen). Nur einzelne Wörter werden
+geprüft — ein Fund wie `"Herr Kaiser"` bleibt unberührt.
+
 **Titel:** Ein akademischer/beruflicher Titel direkt vor einem erkannten
 Namen (`Dr.`, `Prof.`, `Prof. Dr. med.`, `Mag.`, `lic. iur.`, `Dipl.-Ing.`,
 ...) wird in die `PERSON`-Spanne hineingezogen, statt separat/unredigiert
@@ -207,6 +217,11 @@ werden, nicht auf Verdacht.
 
 ## Bekannte Grenzen
 
+- Die PERSON-Denyliste (`denylist.py`) ist eine wachsende Sammlung
+  tatsächlich beobachteter Fehltreffer, keine vollständige Liste aller
+  deutschen Partizip-Nominalisierungen/Kollektiv-Substantive — neue
+  Fehltreffer auf Realtext bitte melden/ergänzen statt anzunehmen, dass
+  damit alle generischen Substantive abgedeckt sind.
 - Presidios eingebauter Deutsch-Support (Kontextwörter, Standard-Recognizer)
   ist schwächer als für Englisch — deshalb hier bewusst eine eigene,
   minimale Registry statt der Presidio-Standardkonfiguration.
